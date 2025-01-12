@@ -114,8 +114,8 @@ class BabySleepTracker:
                 
                 nap_list.append({
                     "id": nap_id,
-                    "start": start_time.strftime("%I:%M %p"),
-                    "end": end_time.strftime("%I:%M %p"),
+                    "start": start_time.strftime("%H:%M"),
+                    "end": end_time.strftime("%H:%M"),
                     "duration": str(duration).split('.')[0]
                 })
             except Exception as e:
@@ -160,49 +160,59 @@ class BabySleepTracker:
         print("No active session found")  # Debug print
         return None
 
-    def add_manual_nap(self, start_time, end_time):
-        print(f"Adding manual nap: {start_time} to {end_time}")  # Debug print
+    def delete_nap(self, nap_id):
+        print(f"Deleting nap with ID: {nap_id}")  # Debug print
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # First check if the nap exists
+        cursor.execute('SELECT id FROM sleep_records WHERE id = ?', (nap_id,))
+        if not cursor.fetchone():
+            conn.close()
+            raise ValueError(f"No nap found with ID {nap_id}")
+        
+        cursor.execute('DELETE FROM sleep_records WHERE id = ?', (nap_id,))
+        conn.commit()
+        conn.close()
+        return True
+
+    def update_nap(self, nap_id, start_time=None, end_time=None):
+        print(f"Updating nap {nap_id} with start: {start_time}, end: {end_time}")  # Debug print
         if isinstance(start_time, str):
             start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M")
         if isinstance(end_time, str):
             end_time = datetime.strptime(end_time, "%Y-%m-%d %H:%M")
             
-        if end_time <= start_time:
+        if end_time and start_time and end_time <= start_time:
             raise ValueError("End time must be after start time")
             
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO sleep_records (start_time, end_time, is_completed)
-            VALUES (?, ?, 1)
-        ''', (start_time, end_time))
-        conn.commit()
-        last_id = cursor.lastrowid
-        conn.close()
-        print(f"Created new manual nap with ID: {last_id}")  # Debug print
-        return last_id
-
-    def clear_day_data(self, date=None):
-        print(f"Clearing data for date: {date}")  # Debug print
-        if date is None:
-            date = datetime.now().date()
-        elif isinstance(date, str):
-            date = datetime.strptime(date, "%Y-%m-%d").date()
-            
-        start_of_day = datetime.combine(date, datetime.min.time())
-        end_of_day = datetime.combine(date, datetime.max.time())
         
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            DELETE FROM sleep_records 
-            WHERE date(start_time) = date(?)
-        ''', (start_of_day,))
-        deleted_count = cursor.rowcount
-        conn.commit()
+        # Check if nap exists
+        cursor.execute('SELECT id FROM sleep_records WHERE id = ?', (nap_id,))
+        if not cursor.fetchone():
+            conn.close()
+            raise ValueError(f"No nap found with ID {nap_id}")
+        
+        # Build update query based on provided values
+        update_fields = []
+        params = []
+        if start_time:
+            update_fields.append('start_time = ?')
+            params.append(start_time)
+        if end_time:
+            update_fields.append('end_time = ?')
+            params.append(end_time)
+        
+        if update_fields:
+            query = f'UPDATE sleep_records SET {", ".join(update_fields)} WHERE id = ?'
+            params.append(nap_id)
+            cursor.execute(query, params)
+            conn.commit()
+        
         conn.close()
-        print(f"Deleted {deleted_count} records")  # Debug print
-        return deleted_count
+        return True
 
 tracker = BabySleepTracker()
 
@@ -269,19 +279,28 @@ def add_manual_nap():
         print(f"Error adding manual nap: {str(e)}")  # Debug print
         return jsonify({"error": str(e)}), 400
 
-@app.route('/clear-day', methods=['POST'])
-def clear_day():
-    print("Received clear day request")  # Debug print
-    data = request.get_json()
-    date = data.get('date')
+@app.route('/nap/<int:nap_id>', methods=['DELETE'])
+def delete_nap(nap_id):
+    print(f"Received delete request for nap {nap_id}")  # Debug print
     try:
-        deleted_count = tracker.clear_day_data(date)
-        return jsonify({
-            "message": "Day data cleared", 
-            "records_deleted": deleted_count
-        }), 200
+        tracker.delete_nap(nap_id)
+        return jsonify({"message": "Nap deleted successfully"}), 200
     except Exception as e:
-        print(f"Error clearing day: {str(e)}")  # Debug print
+        print(f"Error deleting nap: {str(e)}")  # Debug print
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/nap/<int:nap_id>', methods=['PUT'])
+def update_nap(nap_id):
+    print(f"Received update request for nap {nap_id}")  # Debug print
+    data = request.get_json()
+    start_time = data.get('start_time')
+    end_time = data.get('end_time')
+    
+    try:
+        tracker.update_nap(nap_id, start_time, end_time)
+        return jsonify({"message": "Nap updated successfully"}), 200
+    except Exception as e:
+        print(f"Error updating nap: {str(e)}")  # Debug print
         return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':
