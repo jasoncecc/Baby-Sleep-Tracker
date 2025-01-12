@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Moon, Sun, Plus, StopCircle, Calendar, Trash2, PlusCircle } from 'lucide-react';
+import { Moon, Sun, Plus, StopCircle, Calendar, Trash2, PlusCircle, Edit2, X } from 'lucide-react';
 
-const API_URL = '/api';  // Your backend server IP
+const API_URL = '/api';
 
 const BabySleepTracker = () => {
   const [activeSession, setActiveSession] = useState(null);
@@ -12,10 +12,12 @@ const BabySleepTracker = () => {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualStart, setManualStart] = useState('');
   const [manualEnd, setManualEnd] = useState('');
+  const [editingNap, setEditingNap] = useState(null);
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
 
   const checkActiveSession = async () => {
     try {
-      console.log('Checking active session...');
       const response = await fetch(`${API_URL}/active`);
       const data = await response.json();
       setActiveSession(data.active_session);
@@ -83,29 +85,6 @@ const BabySleepTracker = () => {
     }
   };
 
-  const clearDayData = async () => {
-    if (!window.confirm('Are you sure you want to clear all sleep data for this day?')) {
-      return;
-    }
-    
-    try {
-      const response = await fetch(`${API_URL}/clear-day`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate })
-      });
-      
-      if (response.ok) {
-        fetchSummary();
-        setError(null);
-      } else {
-        setError('Failed to clear day data');
-      }
-    } catch (err) {
-      setError('Error clearing day data: ' + err.message);
-    }
-  };
-
   const addManualNap = async () => {
     if (!manualStart || !manualEnd) {
       setError('Please fill in both start and end times');
@@ -137,6 +116,97 @@ const BabySleepTracker = () => {
       }
     } catch (err) {
       setError('Error adding manual nap: ' + err.message);
+    }
+  };
+
+  const deleteNap = async (napId) => {
+    if (!window.confirm('Are you sure you want to delete this nap?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_URL}/nap/${napId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        fetchSummary();
+        setError(null);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to delete nap');
+      }
+    } catch (err) {
+      setError('Error deleting nap: ' + err.message);
+    }
+  };
+
+  const startEditingNap = (nap) => {
+    setEditingNap(nap.id);
+    setEditStart(nap.start);
+    setEditEnd(nap.end);
+  };
+
+  const cancelEdit = () => {
+    setEditingNap(null);
+    setEditStart('');
+    setEditEnd('');
+  };
+
+  const updateNap = async (napId) => {
+    if (!editStart || !editEnd) {
+      setError('Please fill in both start and end times');
+      return;
+    }
+
+    try {
+      const startDateTime = `${selectedDate} ${editStart}`;
+      const endDateTime = `${selectedDate} ${editEnd}`;
+      
+      const response = await fetch(`${API_URL}/nap/${napId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_time: startDateTime,
+          end_time: endDateTime
+        })
+      });
+
+      if (response.ok) {
+        setEditingNap(null);
+        setEditStart('');
+        setEditEnd('');
+        fetchSummary();
+        setError(null);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update nap');
+      }
+    } catch (err) {
+      setError('Error updating nap: ' + err.message);
+    }
+  };
+
+  const clearDayData = async () => {
+    if (!window.confirm('Are you sure you want to clear all sleep data for this day?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_URL}/clear-day`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate })
+      });
+      
+      if (response.ok) {
+        fetchSummary();
+        setError(null);
+      } else {
+        setError('Failed to clear day data');
+      }
+    } catch (err) {
+      setError('Error clearing day data: ' + err.message);
     }
   };
 
@@ -267,10 +337,62 @@ const BabySleepTracker = () => {
                       key={nap.id}
                       className="bg-gray-50 p-3 rounded-md"
                     >
-                      <p className="font-medium">Nap #{index + 1}</p>
-                      <p>Start: {nap.start}</p>
-                      <p>End: {nap.end}</p>
-                      <p>Duration: {nap.duration}</p>
+                      {editingNap === nap.id ? (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">Editing Nap #{index + 1}</span>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-gray-500 hover:text-gray-700"
+                            >
+                              <X size={20} />
+                            </button>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <input
+                              type="time"
+                              value={editStart}
+                              onChange={(e) => setEditStart(e.target.value)}
+                              className="border rounded p-2"
+                            />
+                            <input
+                              type="time"
+                              value={editEnd}
+                              onChange={(e) => setEditEnd(e.target.value)}
+                              className="border rounded p-2"
+                            />
+                            <button
+                              onClick={() => updateNap(nap.id)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md"
+                            >
+                              Update Nap
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <p className="font-medium">Nap #{index + 1}</p>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => startEditingNap(nap)}
+                                className="text-blue-500 hover:text-blue-700"
+                              >
+                                <Edit2 size={20} />
+                              </button>
+                              <button
+                                onClick={() => deleteNap(nap.id)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
+                          </div>
+                          <p>Start: {nap.start}</p>
+                          <p>End: {nap.end}</p>
+                          <p>Duration: {nap.duration}</p>
+                        </>
+                      )}
                     </div>
                   ))}
                   <div className="border-t pt-3">
