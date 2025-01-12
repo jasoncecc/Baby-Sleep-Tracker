@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Moon, Sun, Plus, StopCircle, Calendar, Trash2, PlusCircle } from 'lucide-react';
 
-const API_URL = 'http://192.168.1.172:5000';  // Your backend server IP
+const API_URL = '/api';  // Your backend server IP
 
 const BabySleepTracker = () => {
   const [activeSession, setActiveSession] = useState(null);
