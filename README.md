@@ -106,6 +106,9 @@ cd frontend
 npm install
 npm start
 ```
+## Upcoming
+
+Upcoming features include the ability for login, ability to stop, start and edit other user's nap entries.
 
 ## Contributing
 
