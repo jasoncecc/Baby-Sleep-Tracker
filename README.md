@@ -108,7 +108,10 @@ npm start
 ```
 ## Upcoming
 
-Upcoming features include the ability for login, ability to stop, start and edit other user's nap entries.
+- Upcoming features include the ability for login, ability to stop, start and edit other user's nap entries.
+- Correct time zone issue
+- User login ability
+- Add reporting and logging for backend servers via Promethesus and Grafana stack
 
 ## Contributing
 
